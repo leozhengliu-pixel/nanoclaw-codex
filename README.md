@@ -26,7 +26,7 @@ Implemented now:
 - `src/runtime/codex/codex-runtime.ts`: container-executed Codex runtime wrapper
 - `src/security/mount-security.ts`: allowlist-based extra mount validation
 - `.claude/skills/`: skills-as-code templates
-- `scripts/build-agent-image.ps1` / `scripts/start-host.ps1`: Windows production build and startup scripts
+- `container/build.sh` and `scripts/start-host.sh`: production build and startup scripts
 
 Still intentionally out of scope:
 
@@ -89,13 +89,13 @@ npm run test
 
 Build the runner image:
 
-```powershell
+```bash
 npm run build:image
 ```
 
 Start the long-running host service:
 
-```powershell
+```bash
 npm run start:host
 ```
 
@@ -129,8 +129,7 @@ npm run dev -- schedule-recurring --group-id <group-id> --message "Recurring fol
 - `container/build.sh`
 - `container/test-bin/fake-codex`
 - `container/agent-runner/`
-- `scripts/build-agent-image.ps1`
-- `scripts/start-host.ps1`
+- `scripts/start-host.sh`
 - `launchd/com.nanoclaw-multiruntime.plist`
 - `systemd/nanoclaw-multiruntime.service`
 - [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)

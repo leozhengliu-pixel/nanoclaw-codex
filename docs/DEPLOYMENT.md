@@ -3,8 +3,8 @@
 - `launchd/com.nanoclaw-multiruntime.plist` provides a macOS service template.
 - `systemd/nanoclaw-multiruntime.service` provides a Linux service template.
 - `container/Dockerfile` installs the host app dependencies and the official `@openai/codex` CLI inside the agent image.
-- `container/build.sh` and `scripts/build-agent-image.ps1` build the runner image with either `docker` or `podman`.
-- `scripts/start-host.ps1` and `scripts/start-host.sh` start the long-running host process with the production `serve` command.
+- `container/build.sh` builds the runner image with either `docker` or `podman`.
+- `scripts/start-host.sh` starts the long-running host process with the production `serve` command.
 
 Replace `{{PROJECT_ROOT}}` and `{{NODE_PATH}}` before installation.
 

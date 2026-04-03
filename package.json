@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:container": "powershell -ExecutionPolicy Bypass -Command \"$env:NANOCLAW_RUN_CONTAINER_E2E='1'; vitest run tests/container-engine.e2e.test.ts\"",
-    "build:image": "powershell -ExecutionPolicy Bypass -File ./scripts/build-agent-image.ps1",
-    "start:host": "powershell -ExecutionPolicy Bypass -File ./scripts/start-host.ps1"
+    "test:container": "NANOCLAW_RUN_CONTAINER_E2E=1 vitest run tests/container-engine.e2e.test.ts",
+    "build:image": "sh ./container/build.sh",
+    "start:host": "sh ./scripts/start-host.sh"
   },
   "engines": {
     "node": ">=20"
