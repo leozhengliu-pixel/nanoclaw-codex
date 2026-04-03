@@ -34,6 +34,8 @@ export function createTestConfig(root: string, overrides: Partial<AppConfig> = {
     codexHomePath: path.join(root, "codex-home"),
     openaiApiBaseUrl: "https://api.openai.com/v1",
     openaiCodexBaseUrl: "https://chatgpt.com/backend-api/codex",
+    defaultTimezone: "UTC",
+    containerSkillsPath: path.resolve(process.cwd(), "container", "skills"),
     ...overrides
   };
 }

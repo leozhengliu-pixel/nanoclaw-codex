@@ -141,6 +141,7 @@ export class ContainerRunner {
         env: {
           ...process.env,
           NANOCLAW_AGENT_RUNNER_MODE: this.config.agentRunnerMode,
+          NANOCLAW_CONTAINER_SKILLS_PATH: this.config.containerSkillsPath,
           NANOCLAW_OPENAI_API_BASE_URL: this.config.openaiApiBaseUrl,
           NANOCLAW_OPENAI_CODEX_BASE_URL: this.config.openaiCodexBaseUrl
         }
@@ -219,6 +220,8 @@ export class ContainerRunner {
       "-e",
       `NANOCLAW_AGENT_RUNNER_MODE=${request.mode}`,
       "-e",
+      `NANOCLAW_CONTAINER_SKILLS_PATH=/opt/nanoclaw/skills`,
+      "-e",
       `NANOCLAW_OPENAI_API_BASE_URL=${this.config.openaiApiBaseUrl}`,
       "-e",
       `NANOCLAW_OPENAI_CODEX_BASE_URL=${this.config.openaiCodexBaseUrl}`,
@@ -246,6 +249,14 @@ export class ContainerRunner {
       .catch(() => false);
     if (codexHomeExists) {
       args.push(...this.toMountArgs(this.config.codexHomePath, "/root/.codex", false));
+    }
+
+    const containerSkillsExist = await fs
+      .access(this.config.containerSkillsPath)
+      .then(() => true)
+      .catch(() => false);
+    if (containerSkillsExist) {
+      args.push(...this.toMountArgs(this.config.containerSkillsPath, "/opt/nanoclaw/skills", true));
     }
 
     for (const mount of request.containerConfig.additionalMounts) {

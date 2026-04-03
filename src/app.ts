@@ -2,6 +2,7 @@ import { ProviderAuthService } from "./auth/provider-auth-service.js";
 import { getChannelFactory, getRegisteredChannelNames, type Channel } from "./channels/registry.js";
 import "./channels/index.js";
 import { loadConfig, type AppConfig } from "./config/index.js";
+import { ensureDefaultGroupAssets } from "./groups/default-groups.js";
 import { ControlPlane } from "./host/control-plane.js";
 import { GroupManager } from "./host/group-manager.js";
 import { HostQueue } from "./host/host-queue.js";
@@ -55,6 +56,7 @@ async function connectChannels(router: Router): Promise<Map<string, Channel>> {
 }
 
 export async function createApp(config = loadConfig(), runtime?: AgentRuntime): Promise<AppServices> {
+  await ensureDefaultGroupAssets(config.groupsRoot);
   const storage = new SqliteStorage(config.sqlitePath);
   const providerAuth = new ProviderAuthService(storage, config);
   await providerAuth.importFromCodexHome();
@@ -98,7 +100,7 @@ export async function createApp(config = loadConfig(), runtime?: AgentRuntime): 
     controlPlane.registerGroup({
       channel: "main-local",
       externalId: "main-local:control",
-      folder: "main-local_control",
+      folder: "main",
       isMain: true,
       trigger: config.defaultTrigger
     });

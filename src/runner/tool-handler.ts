@@ -32,6 +32,16 @@ export class RunnerToolHandler {
     const { name, args } = request.payload;
     switch (name) {
       case "schedule_task":
+        if (typeof args.scheduleType === "string" && typeof args.scheduleValue === "string") {
+          return this.controlPlane.scheduleJob({
+            groupId: String(args.groupId),
+            prompt: String(args.prompt),
+            scheduleType: args.scheduleType as "once" | "interval" | "cron",
+            scheduleValue: args.scheduleValue,
+            ...(typeof args.timezone === "string" ? { timezone: args.timezone } : {})
+          });
+        }
+
         return this.controlPlane.scheduleTask({
           groupId: String(args.groupId),
           prompt: String(args.prompt),

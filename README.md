@@ -25,7 +25,10 @@ Implemented now:
 - `container/agent-runner/src/index.ts`: agent-runner scaffold
 - `src/runtime/codex/codex-runtime.ts`: container-executed Codex runtime wrapper
 - `src/security/mount-security.ts`: allowlist-based extra mount validation
-- `.claude/skills/`: skills-as-code templates
+- `setup/` and `setup.sh`: bootstrap and verification steps for install health checks
+- `groups/global/CLAUDE.md` and `groups/main/CLAUDE.md`: default memory templates
+- `container/skills/`: baseline in-container operator skills
+- `.claude/skills/`: operational skill entrypoints
 - `container/build.sh` and `scripts/start-host.sh`: production build and startup scripts
 
 Still intentionally out of scope:
@@ -47,6 +50,7 @@ Current main-local commands:
 - `/register-group <channel> <externalId> <folder>`
 - `/list-groups`
 - `/remote-status`
+- `/auth-status`
 
 ## Configuration
 
@@ -72,6 +76,8 @@ See [`.env.example`](./.env.example) for defaults. Important variables:
 - `NANOCLAW_ASSISTANT_NAME`
 - `NANOCLAW_DEFAULT_TRIGGER`
 - `NANOCLAW_MOUNT_ALLOWLIST_PATH`
+- `NANOCLAW_DEFAULT_TIMEZONE`
+- `NANOCLAW_CONTAINER_SKILLS_PATH`
 
 Recommended modes:
 
@@ -82,6 +88,7 @@ Recommended modes:
 
 ```bash
 npm install
+npm run setup -- --step verify
 npm run typecheck
 npm run lint
 npm run test
@@ -123,12 +130,28 @@ Create a fixed-interval recurring task:
 npm run dev -- schedule-recurring --group-id <group-id> --message "Recurring follow-up" --interval-ms 60000
 ```
 
+Create a cron task:
+
+```bash
+npm run dev -- schedule-cron --group-id <group-id> --message "Daily follow-up" --cron "0 9 * * *" --timezone "Asia/Shanghai"
+```
+
+Inspect setup and runtime health:
+
+```bash
+npm run dev -- status
+npm run dev -- verify
+```
+
 ## Container and Deployment Assets
 
 - `container/Dockerfile`
 - `container/build.sh`
 - `container/test-bin/fake-codex`
 - `container/agent-runner/`
+- `container/skills/`
+- `setup/`
+- `setup.sh`
 - `scripts/start-host.sh`
 - `launchd/com.nanoclaw-multiruntime.plist`
 - `systemd/nanoclaw-multiruntime.service`

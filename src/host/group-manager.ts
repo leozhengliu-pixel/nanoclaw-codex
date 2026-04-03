@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { ensureDefaultGroupAssets } from "../groups/default-groups.js";
 import type { RegisteredGroup } from "../types/host.js";
 
 export interface ManagedGroupPaths {
@@ -22,10 +23,12 @@ export class GroupManager {
   ) {}
 
   public async ensureGroup(group: RegisteredGroup): Promise<ManagedGroupPaths> {
+    await ensureDefaultGroupAssets(this.groupsRoot);
+
     const workspacePath = path.join(this.groupsRoot, group.folder);
     const sessionsPath = path.join(this.sessionsRoot, group.folder);
     const logsPath = path.join(this.logsRoot, group.folder);
-    const globalMemoryFile = path.join(this.groupsRoot, "CLAUDE.md");
+    const globalMemoryFile = path.join(this.groupsRoot, "global", "CLAUDE.md");
     const groupMemoryFile = path.join(workspacePath, "CLAUDE.md");
 
     await Promise.all([
@@ -36,7 +39,7 @@ export class GroupManager {
 
     await Promise.all([
       this.ensureFile(globalMemoryFile),
-      this.ensureFile(groupMemoryFile)
+      this.ensureGroupMemory(groupMemoryFile, group)
     ]);
 
     return {
@@ -54,5 +57,23 @@ export class GroupManager {
   private async ensureFile(filePath: string): Promise<void> {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, "", { flag: "a" });
+  }
+
+  private async ensureGroupMemory(filePath: string, group: RegisteredGroup): Promise<void> {
+    const exists = await fs
+      .access(filePath)
+      .then(() => true)
+      .catch(() => false);
+    if (exists) {
+      return;
+    }
+
+    const templatePath =
+      group.isMain || group.folder === "main"
+        ? path.join(this.groupsRoot, "main", "CLAUDE.md")
+        : path.join(this.groupsRoot, "global", "CLAUDE.md");
+    const contents = await fs.readFile(templatePath, "utf8").catch(() => "");
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, contents, "utf8");
   }
 }

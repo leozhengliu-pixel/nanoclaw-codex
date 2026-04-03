@@ -62,7 +62,7 @@ export interface TranscriptRecord {
   event: RuntimeEvent;
 }
 
-export type ScheduledJobKind = "one-shot" | "recurring";
+export type ScheduledJobKind = "once" | "interval" | "cron";
 
 export interface ScheduledJob {
   id: string;
@@ -71,6 +71,8 @@ export interface ScheduledJob {
   kind: ScheduledJobKind;
   nextRunAt: string;
   intervalMs?: number;
+  cronExpression?: string;
+  timezone?: string;
   active: boolean;
   createdAt: string;
   lastRunAt?: string;

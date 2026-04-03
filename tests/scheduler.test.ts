@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { RunnerToolHandler } from "../src/runner/tool-handler.js";
 import { MockRuntime } from "../src/runtime/mock/mock-runtime.js";
+import { runSetupStep } from "../setup/index.js";
 import { createTempDir, createTestConfig } from "./test-utils.js";
 
 describe("scheduler and tool bridge", () => {
-  it("executes one-shot jobs through the same host path", async () => {
+  it("executes once jobs through the same host path", async () => {
     const root = await createTempDir("nanoclaw-v2-scheduler-");
     const app = await createApp(
       createTestConfig(root),
@@ -15,7 +16,7 @@ describe("scheduler and tool bridge", () => {
 
     try {
       const group = app.storage.getRegisteredGroupByAddress("local-dev", "local-dev:default");
-      const job = app.scheduler.createOneShot(group!.id, "scheduled hello", new Date(Date.now() - 1));
+      const job = app.scheduler.createOnce(group!.id, "scheduled hello", new Date(Date.now() - 1));
       await app.scheduler.tick(new Date());
 
       const stored = app.storage.getScheduledJob(job.id);
@@ -53,5 +54,39 @@ describe("scheduler and tool bridge", () => {
     } finally {
       await app.stop();
     }
+  });
+
+  it("computes the next cron run after execution", async () => {
+    const root = await createTempDir("nanoclaw-v2-cron-");
+    const app = await createApp(
+      createTestConfig(root, { defaultTimezone: "UTC" }),
+      new MockRuntime({ messagePrefix: "cron" })
+    );
+
+    try {
+      const group = app.storage.getRegisteredGroupByAddress("local-dev", "local-dev:default");
+      const job = app.scheduler.createCron(group!.id, "cron hello", "* * * * *", "UTC");
+      await app.scheduler.tick(new Date(job.nextRunAt));
+
+      const stored = app.storage.getScheduledJob(job.id);
+      expect(stored?.active).toBe(true);
+      expect(stored?.kind).toBe("cron");
+      expect(stored?.cronExpression).toBe("* * * * *");
+      expect(stored?.nextRunAt).not.toBe(job.nextRunAt);
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it("setup verify ensures default group assets exist", async () => {
+    const root = await createTempDir("nanoclaw-v2-setup-");
+    const result = await runSetupStep("verify", createTestConfig(root));
+
+    expect(result.ok).toBe(true);
+    expect(result.checks).toMatchObject({
+      groups: {
+        ok: true
+      }
+    });
   });
 });

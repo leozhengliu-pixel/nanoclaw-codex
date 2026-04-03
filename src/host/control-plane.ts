@@ -58,8 +58,30 @@ export class ControlPlane {
   public scheduleTask(input: { groupId: string; prompt: string; intervalMs?: number; runAt?: string }): { jobId: string } {
     const job =
       input.intervalMs && input.intervalMs > 0
-        ? this.scheduler.createRecurring(input.groupId, input.prompt, input.intervalMs)
-        : this.scheduler.createOneShot(input.groupId, input.prompt, input.runAt ? new Date(input.runAt) : new Date());
+        ? this.scheduler.createInterval(input.groupId, input.prompt, input.intervalMs)
+        : this.scheduler.createOnce(input.groupId, input.prompt, input.runAt ? new Date(input.runAt) : new Date());
+    return { jobId: job.id };
+  }
+
+  public scheduleJob(input: {
+    groupId: string;
+    prompt: string;
+    scheduleType: "once" | "interval" | "cron";
+    scheduleValue: string;
+    timezone?: string;
+  }): { jobId: string } {
+    const { groupId, prompt, scheduleType, scheduleValue } = input;
+    const job =
+      scheduleType === "interval"
+        ? this.scheduler.createInterval(groupId, prompt, Number.parseInt(scheduleValue, 10))
+        : scheduleType === "cron"
+          ? this.scheduler.createCron(
+              groupId,
+              prompt,
+              scheduleValue,
+              input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC"
+            )
+          : this.scheduler.createOnce(groupId, prompt, new Date(scheduleValue));
     return { jobId: job.id };
   }
 

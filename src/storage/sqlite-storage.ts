@@ -20,9 +20,11 @@ interface JobRow {
   id: string;
   group_id: string;
   prompt: string;
-  kind: ScheduledJobKind;
+  kind: string;
   next_run_at: string;
   interval_ms: number | null;
+  cron_expression: string | null;
+  timezone: string | null;
   active: number;
   created_at: string;
   last_run_at: string | null;
@@ -118,6 +120,8 @@ export class SqliteStorage {
         kind TEXT NOT NULL,
         next_run_at TEXT NOT NULL,
         interval_ms INTEGER,
+        cron_expression TEXT,
+        timezone TEXT,
         active INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         last_run_at TEXT
@@ -138,6 +142,18 @@ export class SqliteStorage {
         updated_at TEXT NOT NULL
       );
     `);
+
+    this.ensureColumn("scheduled_jobs", "cron_expression", "TEXT");
+    this.ensureColumn("scheduled_jobs", "timezone", "TEXT");
+  }
+
+  private ensureColumn(tableName: string, columnName: string, columnDefinition: string): void {
+    const rows = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+    if (rows.some((row) => row.name === columnName)) {
+      return;
+    }
+
+    this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
   }
 
   public upsertGroup(group: GroupRecord): void {
@@ -421,15 +437,17 @@ export class SqliteStorage {
       .prepare(
         `
           INSERT INTO scheduled_jobs (
-            id, group_id, prompt, kind, next_run_at, interval_ms, active, created_at, last_run_at
+            id, group_id, prompt, kind, next_run_at, interval_ms, cron_expression, timezone, active, created_at, last_run_at
           ) VALUES (
-            @id, @groupId, @prompt, @kind, @nextRunAt, @intervalMs, @active, @createdAt, @lastRunAt
+            @id, @groupId, @prompt, @kind, @nextRunAt, @intervalMs, @cronExpression, @timezone, @active, @createdAt, @lastRunAt
           )
         `
       )
       .run({
         ...job,
         intervalMs: job.intervalMs ?? null,
+        cronExpression: job.cronExpression ?? null,
+        timezone: job.timezone ?? null,
         active: job.active ? 1 : 0,
         lastRunAt: job.lastRunAt ?? null
       });
@@ -596,7 +614,7 @@ export class SqliteStorage {
       id: row.id,
       groupId: row.group_id,
       prompt: row.prompt,
-      kind: row.kind,
+      kind: row.kind === "one-shot" ? "once" : row.kind === "recurring" ? "interval" : (row.kind as ScheduledJobKind),
       nextRunAt: row.next_run_at,
       active: row.active === 1,
       createdAt: row.created_at
@@ -604,6 +622,14 @@ export class SqliteStorage {
 
     if (row.interval_ms !== null) {
       job.intervalMs = row.interval_ms;
+    }
+
+    if (row.cron_expression) {
+      job.cronExpression = row.cron_expression;
+    }
+
+    if (row.timezone) {
+      job.timezone = row.timezone;
     }
 
     if (row.last_run_at) {

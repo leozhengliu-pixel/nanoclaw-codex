@@ -1,6 +1,8 @@
 import { createApp } from "./app.js";
 import { LocalDevChannel } from "./channels/local-dev-channel.js";
 import { MainLocalChannel } from "./channels/main-local-channel.js";
+import { loadConfig } from "./config/index.js";
+import { runSetupStep } from "../setup/index.js";
 
 function getFlag(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -16,7 +18,18 @@ async function main(): Promise<void> {
   npm run dev -- serve
   npm run dev -- send --channel <local-dev|main-local> --external-id <id> --message <text>
   npm run dev -- schedule-once --group-id <groupId> --message <text> [--delay-ms <ms>]
-  npm run dev -- schedule-recurring --group-id <groupId> --message <text> --interval-ms <ms>`);
+  npm run dev -- schedule-recurring --group-id <groupId> --message <text> --interval-ms <ms>
+  npm run dev -- schedule-cron --group-id <groupId> --message <text> --cron <expr> [--timezone <iana>]
+  npm run dev -- setup [--step <environment|groups|status|verify>]
+  npm run dev -- status
+  npm run dev -- verify`);
+    return;
+  }
+
+  if (command === "setup" || command === "status" || command === "verify") {
+    const step = command === "setup" ? getFlag(args, "--step") ?? "verify" : command;
+    const result = await runSetupStep(step, loadConfig());
+    console.log(JSON.stringify(result, null, 2));
     return;
   }
 
@@ -64,13 +77,13 @@ async function main(): Promise<void> {
       }
 
       const delayMs = Number.parseInt(getFlag(args, "--delay-ms") ?? "0", 10);
-      const job = app.scheduler.createOneShot(groupId, message, new Date(Date.now() + delayMs));
+      const job = app.scheduler.createOnce(groupId, message, new Date(Date.now() + delayMs));
       await app.scheduler.tick(new Date(job.nextRunAt));
       console.log(JSON.stringify(job, null, 2));
       return;
     }
 
-    if (command === "schedule-recurring") {
+    if (command === "schedule-recurring" || command === "schedule-interval") {
       const groupId = getFlag(args, "--group-id");
       const message = getFlag(args, "--message");
       const intervalMs = Number.parseInt(getFlag(args, "--interval-ms") ?? "", 10);
@@ -78,7 +91,21 @@ async function main(): Promise<void> {
         throw new Error("--group-id, --message, and a positive --interval-ms are required");
       }
 
-      const job = app.scheduler.createRecurring(groupId, message, intervalMs);
+      const job = app.scheduler.createInterval(groupId, message, intervalMs);
+      console.log(JSON.stringify(job, null, 2));
+      return;
+    }
+
+    if (command === "schedule-cron") {
+      const groupId = getFlag(args, "--group-id");
+      const message = getFlag(args, "--message");
+      const cronExpression = getFlag(args, "--cron");
+      const timezone = getFlag(args, "--timezone") ?? app.config.defaultTimezone;
+      if (!groupId || !message || !cronExpression) {
+        throw new Error("--group-id, --message, and --cron are required");
+      }
+
+      const job = app.scheduler.createCron(groupId, message, cronExpression, timezone);
       console.log(JSON.stringify(job, null, 2));
       return;
     }

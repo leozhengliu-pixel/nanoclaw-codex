@@ -1,7 +1,11 @@
 node_modules/
 dist/
 data/
-groups/
+groups/*
+!groups/global/
+!groups/global/CLAUDE.md
+!groups/main/
+!groups/main/CLAUDE.md
 logs/
 .env
 .DS_Store

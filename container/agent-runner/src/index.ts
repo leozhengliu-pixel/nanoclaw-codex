@@ -54,6 +54,33 @@ async function runMock(request: RunnerTaskRequest, ipcDir: string, eventsFile: s
     });
     await appendEvent(eventsFile, request.taskId, { type: "tool_result", name: "list_tasks", payload: result });
     await appendEvent(eventsFile, request.taskId, { type: "message", text: JSON.stringify(result) });
+  } else if (lastMessage.startsWith("/tool capabilities")) {
+    const skillsPath = process.env.NANOCLAW_CONTAINER_SKILLS_PATH ?? "";
+    await appendEvent(eventsFile, request.taskId, {
+      type: "message",
+      text: JSON.stringify({
+        executionMode: "container",
+        scheduleTypes: ["once", "interval", "cron"],
+        skillsPath,
+        toolNames: ["schedule_task", "list_tasks", "get_task", "pause_task", "resume_task", "cancel_task", "send_message"]
+      })
+    });
+  } else if (lastMessage.startsWith("/tool status")) {
+    const skillsPath = process.env.NANOCLAW_CONTAINER_SKILLS_PATH ?? "";
+    const hasSkills = skillsPath
+      ? await fs
+          .access(skillsPath)
+          .then(() => true)
+          .catch(() => false)
+      : false;
+    await appendEvent(eventsFile, request.taskId, {
+      type: "message",
+      text: JSON.stringify({
+        ok: true,
+        skillsPath,
+        containerSkillsPresent: hasSkills
+      })
+    });
   } else {
     await appendEvent(eventsFile, request.taskId, {
       type: "message",

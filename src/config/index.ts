@@ -30,6 +30,8 @@ export interface AppConfig {
   codexHomePath: string;
   openaiApiBaseUrl: string;
   openaiCodexBaseUrl: string;
+  defaultTimezone: string;
+  containerSkillsPath: string;
 }
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
@@ -126,6 +128,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
       path.resolve(cwd, "config-examples", "mount-allowlist.json"),
     codexHomePath: path.resolve(cwd, env.NANOCLAW_CODEX_HOME_PATH ?? path.join("contexts", "codex-home")),
     openaiApiBaseUrl: env.NANOCLAW_OPENAI_API_BASE_URL ?? "https://api.openai.com/v1",
-    openaiCodexBaseUrl: env.NANOCLAW_OPENAI_CODEX_BASE_URL ?? "https://chatgpt.com/backend-api/codex"
+    openaiCodexBaseUrl: env.NANOCLAW_OPENAI_CODEX_BASE_URL ?? "https://chatgpt.com/backend-api/codex",
+    defaultTimezone: env.NANOCLAW_DEFAULT_TIMEZONE ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC",
+    containerSkillsPath: path.resolve(cwd, env.NANOCLAW_CONTAINER_SKILLS_PATH ?? path.join("container", "skills"))
   };
 }
