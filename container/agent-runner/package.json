@@ -1,0 +1,5 @@
+{
+  "name": "nanoclaw-agent-runner",
+  "private": true,
+  "type": "module"
+}

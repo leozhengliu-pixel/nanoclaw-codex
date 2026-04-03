@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+groups/
+logs/
+.env
+.DS_Store
+coverage/
+contexts/meta/
+contexts/codex-home/

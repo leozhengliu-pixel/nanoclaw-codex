@@ -1,0 +1,37 @@
+{
+  "name": "nanoclaw-multiruntime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal multi-runtime group-oriented host with an initial Codex runtime adapter.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "serve": "tsx src/index.ts serve",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:container": "powershell -ExecutionPolicy Bypass -Command \"$env:NANOCLAW_RUN_CONTAINER_E2E='1'; vitest run tests/container-engine.e2e.test.ts\"",
+    "build:image": "powershell -ExecutionPolicy Bypass -File ./scripts/build-agent-image.ps1",
+    "start:host": "powershell -ExecutionPolicy Bypass -File ./scripts/start-host.ps1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.9",
+    "eslint": "^9.22.0",
+    "globals": "^15.15.0",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.1",
+    "vitest": "^3.1.1"
+  }
+}

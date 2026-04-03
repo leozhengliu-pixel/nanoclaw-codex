@@ -1,0 +1,13 @@
+[Unit]
+Description=NanoClaw MultiRuntime
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{PROJECT_ROOT}}
+ExecStart={{NODE_PATH}} {{PROJECT_ROOT}}/dist/index.js
+Restart=always
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

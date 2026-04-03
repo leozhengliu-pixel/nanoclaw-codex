@@ -1,0 +1,12 @@
+{
+  "allowlist": [
+    {
+      "hostPath": ".",
+      "readonly": false
+    },
+    {
+      "hostPath": "./groups",
+      "readonly": false
+    }
+  ]
+}

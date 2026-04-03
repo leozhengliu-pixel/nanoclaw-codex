@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+output_file=""
+prompt=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    exec|--skip-git-repo-check|--sandbox|-a)
+      shift
+      if [ "${1:-}" = "workspace-write" ] || [ "${1:-}" = "never" ]; then
+        shift
+      fi
+      ;;
+    -C)
+      shift 2
+      ;;
+    -o)
+      output_file="$2"
+      shift 2
+      ;;
+    *)
+      prompt="$1"
+      shift
+      ;;
+  esac
+done
+
+if [ -n "$output_file" ]; then
+  printf 'fake-codex:%s\n' "$prompt" > "$output_file"
+fi
