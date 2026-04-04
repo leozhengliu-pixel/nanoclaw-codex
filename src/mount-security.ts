@@ -37,6 +37,45 @@ const DEFAULT_BLOCKED_PATTERNS = [
   ".secret"
 ];
 
+export function normalizeAllowlist(raw: unknown): MountAllowlist {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("mount allowlist must be an object");
+  }
+
+  const typed = raw as {
+    allowedRoots?: unknown;
+    blockedPatterns?: unknown;
+    nonMainReadOnly?: unknown;
+    allowlist?: Array<{ hostPath?: unknown; readonly?: unknown }> | unknown;
+  };
+
+  if (Array.isArray(typed.allowedRoots)) {
+    const blockedPatterns = Array.isArray(typed.blockedPatterns) ? typed.blockedPatterns.filter((item) => typeof item === "string") : [];
+    return {
+      allowedRoots: typed.allowedRoots as AllowedRoot[],
+      blockedPatterns,
+      nonMainReadOnly: typeof typed.nonMainReadOnly === "boolean" ? typed.nonMainReadOnly : true
+    };
+  }
+
+  if (Array.isArray(typed.allowlist)) {
+    const allowedRoots: AllowedRoot[] = typed.allowlist
+      .filter((item): item is { hostPath: string; readonly?: boolean } => !!item && typeof item === "object" && typeof item.hostPath === "string")
+      .map((item) => ({
+        path: item.hostPath,
+        allowReadWrite: item.readonly !== true
+      }));
+
+    return {
+      allowedRoots,
+      blockedPatterns: [],
+      nonMainReadOnly: true
+    };
+  }
+
+  throw new Error("allowedRoots must be an array");
+}
+
 export function loadMountAllowlist(): MountAllowlist | null {
   if (cachedAllowlist !== null) {
     return cachedAllowlist;
@@ -56,17 +95,7 @@ export function loadMountAllowlist(): MountAllowlist | null {
     }
 
     const content = fs.readFileSync(MOUNT_ALLOWLIST_PATH, "utf-8");
-    const allowlist = JSON.parse(content) as MountAllowlist;
-
-    if (!Array.isArray(allowlist.allowedRoots)) {
-      throw new Error("allowedRoots must be an array");
-    }
-    if (!Array.isArray(allowlist.blockedPatterns)) {
-      throw new Error("blockedPatterns must be an array");
-    }
-    if (typeof allowlist.nonMainReadOnly !== "boolean") {
-      throw new Error("nonMainReadOnly must be a boolean");
-    }
+    const allowlist = normalizeAllowlist(JSON.parse(content));
 
     allowlist.blockedPatterns = [...new Set([...DEFAULT_BLOCKED_PATTERNS, ...allowlist.blockedPatterns])];
     cachedAllowlist = allowlist;

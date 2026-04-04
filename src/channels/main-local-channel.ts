@@ -5,6 +5,8 @@ export class MainLocalChannel implements Channel {
   public readonly name = "main-local";
   private connected = false;
   private readonly sentMessages: Array<{ externalId: string; text: string }> = [];
+  private readonly typingEvents: Array<{ externalId: string; isTyping: boolean }> = [];
+  private syncCount = 0;
 
   public constructor(private readonly opts: ChannelOpts) {}
 
@@ -32,6 +34,14 @@ export class MainLocalChannel implements Channel {
     this.sentMessages.push({ externalId, text });
   }
 
+  public async setTyping(externalId: string, isTyping: boolean): Promise<void> {
+    this.typingEvents.push({ externalId, isTyping });
+  }
+
+  public async syncGroups(_force: boolean): Promise<void> {
+    this.syncCount += 1;
+  }
+
   public async emitInbound(externalId: string, text: string, senderId = "main-user"): Promise<void> {
     const createdAt = new Date().toISOString();
     this.opts.onChatMetadata(externalId, createdAt, externalId, this.name, false);
@@ -49,6 +59,14 @@ export class MainLocalChannel implements Channel {
 
   public getSentMessages(): Array<{ externalId: string; text: string }> {
     return [...this.sentMessages];
+  }
+
+  public getTypingEvents(): Array<{ externalId: string; isTyping: boolean }> {
+    return [...this.typingEvents];
+  }
+
+  public getSyncCount(): number {
+    return this.syncCount;
   }
 }
 

@@ -101,4 +101,41 @@ describe("app integration", () => {
       await orchestrator.stop();
     }
   });
+
+  it("toggles typing around runtime execution and forwards reply context into the runtime prompt", async () => {
+    const root = await createTempDir("nanoclaw-v2-typing-");
+    const orchestrator = await createOrchestrator(
+      createTestConfig(root, {
+        agentRunnerMode: "mock"
+      }),
+      new MockRuntime({ messagePrefix: "inspect" })
+    );
+
+    try {
+      orchestrator.start();
+      const channel = orchestrator.channels.get("local-dev") as LocalDevChannel;
+      await orchestrator.app.router.handleInbound({
+        channel: "local-dev",
+        externalId: "local-dev:default",
+        text: "@Andy answer this",
+        replyToMessageId: "m-1",
+        replyToSenderName: "alice",
+        replyToMessageContent: "previous message",
+        threadId: "thread-1"
+      });
+
+      const sent = await waitForSentMessage(channel, "inspect:");
+      expect(sent.at(-1)?.text).toContain("[thread:thread-1]");
+      expect(sent.at(-1)?.text).toContain("Reply context:");
+      expect(sent.at(-1)?.text).toContain("previous message");
+
+      const typing = channel.getTypingEvents();
+      expect(typing).toEqual([
+        { externalId: "local-dev:default", isTyping: true },
+        { externalId: "local-dev:default", isTyping: false }
+      ]);
+    } finally {
+      await orchestrator.stop();
+    }
+  });
 });

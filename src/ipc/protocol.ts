@@ -30,6 +30,7 @@ export interface ToolRequestPayload {
     | "send_message"
     | "register_group"
     | "list_groups"
+    | "sync_groups"
     | "update_group_mounts";
   args: Record<string, unknown>;
 }

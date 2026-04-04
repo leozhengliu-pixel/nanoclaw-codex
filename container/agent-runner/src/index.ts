@@ -2,10 +2,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import type { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
 
 import type { RunnerTaskRequest, RuntimeEventEnvelope, ToolRequestEnvelope, ToolResponseEnvelope } from "../../../src/ipc/protocol.js";
 import type { ProviderCredential } from "../../../src/types/runtime.js";
+
+const TOOL_BRIDGE_SOURCE = fileURLToPath(new URL("./tool-bridge.ts", import.meta.url));
+const require = createRequire(import.meta.url);
+const TSX_LOADER_PATH = require.resolve("tsx");
 
 function getArg(flag: string): string | undefined {
   const index = process.argv.indexOf(flag);
@@ -82,6 +88,43 @@ function collectAgentMessage(payload: Record<string, unknown>): string | null {
   }
 
   return typedItem.text.trim() || null;
+}
+
+function buildToolInstructions(request: RunnerTaskRequest): string {
+  return [
+    "You can access NanoClaw host tools from the shell using `nanoclaw-tool`.",
+    "If `nanoclaw-tool` is not on PATH, use `/usr/local/bin/nanoclaw-tool`.",
+    `Default groupId for this session: ${request.group.id}`,
+    "Usage: `nanoclaw-tool <tool_name> [json_args]`",
+    "Run `nanoclaw-tool capabilities` to inspect available tools and examples.",
+    "Available tools: schedule_task, list_tasks, get_task, pause_task, resume_task, cancel_task, send_message, register_group, list_groups, sync_groups, update_group_mounts.",
+    "Prefer `nanoclaw-tool` over ad-hoc file edits when you need NanoClaw scheduler/group/task operations."
+  ].join("\n");
+}
+
+async function createToolBridge(
+  request: RunnerTaskRequest,
+  eventsFile: string
+): Promise<{ wrapperPath: string; fallbackPath: string }> {
+  const runtimeDir = path.join(request.workingDirectory, ".nanoclaw-runtime");
+  const fallbackPath = path.join(runtimeDir, "nanoclaw-tool");
+  const wrapperPath = "/usr/local/bin/nanoclaw-tool";
+  const wrapper = [
+    "#!/usr/bin/env sh",
+    "set -eu",
+    `exec node --import ${JSON.stringify(TSX_LOADER_PATH)} ${JSON.stringify(TOOL_BRIDGE_SOURCE)} \"$@\"`
+  ].join("\n");
+
+  await fs.mkdir(runtimeDir, { recursive: true });
+  await fs.writeFile(fallbackPath, `${wrapper}\n`, { mode: 0o755 });
+  await fs.chmod(fallbackPath, 0o755);
+  try {
+    await fs.writeFile(wrapperPath, `${wrapper}\n`, { mode: 0o755 });
+    await fs.chmod(wrapperPath, 0o755);
+    return { wrapperPath, fallbackPath };
+  } catch {
+    return { wrapperPath: fallbackPath, fallbackPath };
+  }
 }
 
 async function appendEvent(eventsFile: string, taskId: string, event: RuntimeEventEnvelope["event"]): Promise<void> {
@@ -326,8 +369,12 @@ async function runCodex(request: RunnerTaskRequest, eventsFile: string): Promise
 
   const outputPath = path.join(path.dirname(eventsFile), "codex-last-message.txt");
   const sessionStatePath = path.join(request.sessionsPath, `${request.sessionId}.json`);
-  const prompt = request.messages.map((message) => `${message.role.toUpperCase()}: ${message.content}`).join("\n");
+  const prompt = [
+    `SYSTEM: ${buildToolInstructions(request)}`,
+    ...request.messages.map((message) => `${message.role.toUpperCase()}: ${message.content}`)
+  ].join("\n");
   const isolatedHome = await createIsolatedCodexHome(request, eventsFile);
+  const toolBridge = await createToolBridge(request, eventsFile);
   try {
     const child = spawn(
       request.codexBinaryPath,
@@ -337,8 +384,7 @@ async function runCodex(request: RunnerTaskRequest, eventsFile: string): Promise
         "--color",
         "never",
         "--skip-git-repo-check",
-        "--sandbox",
-        "workspace-write",
+        "--dangerously-bypass-approvals-and-sandbox",
         "--model",
         request.modelId,
         "-C",
@@ -353,7 +399,12 @@ async function runCodex(request: RunnerTaskRequest, eventsFile: string): Promise
         env: {
           ...process.env,
           CODEX_HOME: isolatedHome.codexHomePath,
-          HOME: isolatedHome.codexHomePath
+          HOME: isolatedHome.codexHomePath,
+          PATH: `${path.dirname(toolBridge.wrapperPath)}:${process.env.PATH ?? ""}`,
+          NANOCLAW_TOOL_IPC_DIR: path.dirname(eventsFile),
+          NANOCLAW_TOOL_TASK_ID: request.taskId,
+          NANOCLAW_TOOL_EVENTS_FILE: eventsFile,
+          NANOCLAW_TOOL_DEFAULT_GROUP_ID: request.group.id
         }
       }
     );

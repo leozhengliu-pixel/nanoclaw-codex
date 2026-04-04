@@ -240,6 +240,7 @@ export class ContainerRunner {
   private async buildMountArgs(request: RunnerTaskRequest, runDir: string): Promise<string[]> {
     const args = [
       ...this.toMountArgs(runDir, "/ipc", false),
+      ...this.toMountArgs(runDir, "/workspace/.nanoclaw-runtime", false),
       ...this.toMountArgs(request.workingDirectory, "/workspace", false),
       ...this.toMountArgs(request.sessionsPath, "/sessions", false),
       ...this.toMountArgs(request.globalMemoryFile, "/memory/global/CLAUDE.md", false),

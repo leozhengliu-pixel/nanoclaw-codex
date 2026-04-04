@@ -40,12 +40,12 @@ describe("scheduler and tool bridge", () => {
     try {
       orchestrator.start();
       const group = app.storage.getRegisteredGroupByAddress("local-dev", "local-dev:default");
-      await app.host.enqueueScheduledPrompt(group!.id, "hello tools");
+      const seeded = await app.host.enqueueScheduledPrompt(group!.id, "hello tools");
 
       const handler = new RunnerToolHandler(app.controlPlane, app.remoteControl);
       const response = await handler.handleToolRequest({
         id: "req-1",
-        taskId: "task-1",
+        taskId: seeded.taskId,
         payload: {
           name: "list_tasks",
           args: { groupId: group!.id }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { LocalDevChannel } from "../src/channels/local-dev-channel.js";
 import { MainLocalChannel } from "../src/channels/main-local-channel.js";
 import { createOrchestrator } from "../src/orchestrator.js";
 import { createTempDir, createTestConfig } from "./test-utils.js";
@@ -96,6 +97,23 @@ describe("router", () => {
       await channel.emitInbound("main-local:control", "/auth-login openai-codex");
 
       expect(channel.getSentMessages().at(-1)?.text).toContain("openai-codex login failed: OpenAI Codex auth preflight failed");
+    } finally {
+      await orchestrator.stop();
+    }
+  });
+
+  it("main-local can trigger group sync", async () => {
+    const root = await createTempDir("nanoclaw-router-sync-");
+    const orchestrator = await createOrchestrator(createTestConfig(root));
+
+    try {
+      orchestrator.start();
+      const mainChannel = orchestrator.channels.get("main-local") as MainLocalChannel;
+      const localChannel = orchestrator.channels.get("local-dev") as LocalDevChannel;
+      await mainChannel.emitInbound("main-local:control", "/sync-groups");
+
+      expect(mainChannel.getSyncCount()).toBeGreaterThan(0);
+      expect(localChannel.getSyncCount()).toBeGreaterThan(0);
     } finally {
       await orchestrator.stop();
     }

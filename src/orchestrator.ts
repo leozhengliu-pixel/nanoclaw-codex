@@ -15,6 +15,7 @@ import {
   clearProviderAuth,
   createExecutionTask,
   createTask as createScheduledTask,
+  deleteTask,
   getAllTasks,
   getExecutionTask,
   getLastBotMessageTimestamp,
@@ -34,6 +35,7 @@ import {
   setSession,
   storeChatMetadata,
   storeMessage,
+  updateTask,
   updateExecutionTask,
   updateRegisteredGroupMounts,
   updateRegisteredGroupRuntime,
@@ -41,8 +43,10 @@ import {
   upsertProviderAuth
 } from "./db.js";
 import { GroupQueue } from "./group-queue.js";
+import { isValidGroupFolder } from "./group-folder.js";
 import { logger } from "./logger.js";
 import { GroupManager } from "./host/group-manager.js";
+import { validateMount } from "./mount-security.js";
 import { RunnerToolHandler, type ToolHandlerControlPlane } from "./runner/tool-handler.js";
 import { ContainerRunner } from "./runner/container-runner.js";
 import { CodexRuntime } from "./runtime/codex/codex-runtime.js";
@@ -75,6 +79,20 @@ interface CompatTaskResult {
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | "paused";
 }
 
+interface InboundEnvelope {
+  id?: string;
+  channel: string;
+  externalId: string;
+  text: string;
+  senderId?: string;
+  senderName?: string;
+  createdAt?: string;
+  threadId?: string;
+  replyToMessageId?: string;
+  replyToMessageContent?: string;
+  replyToSenderName?: string;
+}
+
 export interface OrchestratorAppFacade {
   config: AppConfig;
   runtime: AgentRuntime;
@@ -98,15 +116,7 @@ export interface OrchestratorAppFacade {
     enqueueScheduledPrompt(groupId: string, prompt: string, scheduledJobId?: string): Promise<CompatTaskResult>;
   };
   router: {
-    handleInbound(message: {
-      id?: string;
-      channel: string;
-      externalId: string;
-      text: string;
-      senderId?: string;
-      senderName?: string;
-      createdAt?: string;
-    }): Promise<CompatTaskResult | null>;
+    handleInbound(message: InboundEnvelope): Promise<CompatTaskResult | null>;
   };
   controlPlane: ToolHandlerControlPlane;
 }
@@ -179,6 +189,21 @@ function toCompatScheduledJob(task: ScheduledTask): CompatScheduledJob {
     createdAt: task.created_at,
     ...(task.last_run ? { lastRunAt: task.last_run } : {})
   };
+}
+
+function formatInboundPrompt(message: InboundEnvelope): string {
+  const lines: string[] = [];
+  if (message.threadId) {
+    lines.push(`[thread:${message.threadId}]`);
+  }
+  if (message.replyToMessageId || message.replyToSenderName || message.replyToMessageContent) {
+    lines.push("Reply context:");
+    if (message.replyToSenderName) lines.push(`- from: ${message.replyToSenderName}`);
+    if (message.replyToMessageId) lines.push(`- messageId: ${message.replyToMessageId}`);
+    if (message.replyToMessageContent) lines.push(`- content: ${message.replyToMessageContent}`);
+  }
+  lines.push(message.text);
+  return lines.join("\n");
 }
 
 function createProviderAuthStorageAdapter() {
@@ -303,7 +328,9 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
     prompt: string,
     scheduleType: ScheduledTask["schedule_type"],
     scheduleValue: string,
-    nextRun: string | null
+    nextRun: string | null,
+    contextMode: ScheduledTask["context_mode"] = "group",
+    script?: string | null
   ): ScheduledTask => {
     const rootGroup = registeredGroups[groupId] ?? getRegisteredGroup(groupId);
     if (!rootGroup) {
@@ -314,9 +341,10 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
       group_folder: rootGroup.folder,
       chat_jid: groupId,
       prompt,
+      script: script ?? null,
       schedule_type: scheduleType,
       schedule_value: scheduleValue,
-      context_mode: "group",
+      context_mode: contextMode,
       next_run: nextRun,
       last_run: null,
       last_result: null,
@@ -380,7 +408,11 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
 
     const events: RuntimeEvent[] = [];
     let status: CompatTaskResult["status"] = "completed";
+    const channel = [...channels.values()].find((candidate) => candidate.ownsJid(groupId));
     try {
+      if (channel?.setTyping) {
+        await channel.setTyping(groupId, true).catch(() => undefined);
+      }
       for await (const event of runtime.runTurn({
         taskId,
         sessionId: session.id,
@@ -406,6 +438,10 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
         type: "error",
         error: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      if (channel?.setTyping) {
+        await channel.setTyping(groupId, false).catch(() => undefined);
+      }
     }
 
     updateExecutionTask(taskId, { status, sessionId: session.id });
@@ -419,10 +455,31 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
       await sendToJid(groupId, groups.map((item) => `${item.channel}:${item.externalId} -> ${item.folder}`).join("\n"));
       return;
     }
+    if (trimmed === "/list-tasks") {
+      const tasks = listExecutionTasks();
+      await sendToJid(groupId, tasks.map((task) => `${task.id} ${task.status} ${task.groupJid}`).join("\n") || "No tasks");
+      return;
+    }
+    if (trimmed.startsWith("/get-task ")) {
+      const [, taskId] = trimmed.split(/\s+/, 2);
+      const task = taskId ? getExecutionTask(taskId) ?? getTaskById(taskId) : null;
+      await sendToJid(groupId, task ? JSON.stringify(task) : "Unknown task");
+      return;
+    }
     if (trimmed === "/remote-status") {
       const status = remoteControl.status();
       const message = status.recentEvents.map((event) => `[${event.level}] ${event.message}`).join("\n") || "No events";
       await sendToJid(groupId, message);
+      return;
+    }
+    if (trimmed === "/sync-groups") {
+      await Promise.all(
+        [...channels.values()]
+          .filter((channel) => typeof channel.syncGroups === "function")
+          .map((channel) => channel.syncGroups!(true))
+      );
+      registeredGroups = syncRegisteredGroups();
+      await sendToJid(groupId, "Group sync completed");
       return;
     }
     if (trimmed === "/auth-status") {
@@ -479,12 +536,24 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
       return;
     }
     if (trimmed.startsWith("/register-group ")) {
-      const [, channel, externalId, folder] = trimmed.split(/\s+/, 4);
+      const parts = trimmed.split(/\s+/);
+      const [, channel, externalId, folder, trigger, requiresTriggerRaw] = parts;
       if (!channel || !externalId || !folder) {
-        await sendToJid(groupId, "Usage: /register-group <channel> <externalId> <folder>");
+        await sendToJid(groupId, "Usage: /register-group <channel> <externalId> <folder> [trigger] [requiresTrigger]");
         return;
       }
-      const registered = registerGroup({ channel, externalId, folder });
+      if (!isValidGroupFolder(folder)) {
+        await sendToJid(groupId, "Invalid group folder");
+        return;
+      }
+      const registered = registerGroup({ channel, externalId, folder, trigger: trigger ?? config.defaultTrigger });
+      if (requiresTriggerRaw === "false") {
+        setRegisteredGroup(registered.id, {
+          ...toRootGroup(registered),
+          requiresTrigger: false
+        });
+        registeredGroups = syncRegisteredGroups();
+      }
       remoteControl.record("info", "Registered group via main-local command", { groupId: registered.id });
       await sendToJid(groupId, `Registered ${registered.channel}:${registered.externalId} as ${registered.folder}`);
       return;
@@ -515,15 +584,7 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
     await sendToJid(groupId, `Unknown main command: ${trimmed}`);
   };
 
-  const handleInbound = async (message: {
-    id?: string;
-    channel: string;
-    externalId: string;
-    text: string;
-    senderId?: string;
-    senderName?: string;
-    createdAt?: string;
-  }): Promise<CompatTaskResult | null> => {
+  const handleInbound = async (message: InboundEnvelope): Promise<CompatTaskResult | null> => {
     const group = compatGroupByAddress(message.channel, message.externalId);
     if (!group) {
       remoteControl.record("warn", "Ignoring message from unregistered group", {
@@ -551,7 +612,14 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
     if (!normalized) {
       return null;
     }
-    return await runTaskForGroup(group.id, normalized, "message");
+    return await runTaskForGroup(
+      group.id,
+      formatInboundPrompt({
+        ...message,
+        text: normalized
+      }),
+      "message"
+    );
   };
 
   const runDueScheduledTasks = async (now = new Date()): Promise<void> => {
@@ -580,8 +648,56 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
     }
   };
 
+  const syncChannelGroups = async (force: boolean): Promise<void> => {
+    await Promise.all(
+      [...channels.values()]
+        .filter((channel) => typeof channel.syncGroups === "function")
+        .map((channel) => channel.syncGroups!(force))
+    );
+  };
+
+  const ensureAuthorizedTargetGroup = (sourceGroupId: string, targetGroupId: string): CompatRegisteredGroup => {
+    const sourceGroup = compatGroupById(sourceGroupId);
+    const targetGroup = compatGroupById(targetGroupId);
+    if (!sourceGroup) {
+      throw new Error(`Unknown source group: ${sourceGroupId}`);
+    }
+    if (!targetGroup) {
+      throw new Error(`Unknown target group: ${targetGroupId}`);
+    }
+    if (!sourceGroup.isMain && sourceGroup.id !== targetGroup.id) {
+      throw new Error("Unauthorized cross-group operation");
+    }
+    return targetGroup;
+  };
+
   const controlPlane: ToolHandlerControlPlane = {
+    resolveRequestContext(taskId) {
+      const executionTask = getExecutionTask(taskId);
+      if (!executionTask) {
+        throw new Error(`Unknown execution task: ${taskId}`);
+      }
+      const sourceGroup = compatGroupById(executionTask.groupJid);
+      if (!sourceGroup) {
+        throw new Error(`Unknown source group: ${executionTask.groupJid}`);
+      }
+      return {
+        sourceGroupId: sourceGroup.id,
+        isMainGroup: sourceGroup.isMain
+      };
+    },
+    getGroup(groupId) {
+      const group = compatGroupById(groupId);
+      return group
+        ? {
+            id: group.id,
+            isMain: group.isMain,
+            folder: group.folder
+          }
+        : null;
+    },
     scheduleJob(input) {
+      ensureAuthorizedTargetGroup(input.sourceGroupId, input.groupId);
       const nextRun =
         input.scheduleType === "interval"
           ? new Date(Date.now() + Number.parseInt(input.scheduleValue, 10)).toISOString()
@@ -593,7 +709,7 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
                 prompt: input.prompt,
                 schedule_type: "cron",
                 schedule_value: input.scheduleValue,
-                context_mode: "group",
+                context_mode: input.contextMode ?? "group",
                 next_run: new Date().toISOString(),
                 last_run: null,
                 last_result: null,
@@ -601,50 +717,147 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
                 created_at: new Date().toISOString()
               })
             : input.scheduleValue;
-      const task = createScheduledRecord(input.groupId, input.prompt, input.scheduleType, input.scheduleValue, nextRun);
+      const task = createScheduledRecord(
+        input.groupId,
+        input.prompt,
+        input.scheduleType,
+        input.scheduleValue,
+        nextRun,
+        input.contextMode ?? "group",
+        input.script
+      );
       return { jobId: task.id };
     },
     scheduleTask(input) {
+      ensureAuthorizedTargetGroup(input.sourceGroupId, input.groupId);
       if (input.intervalMs && input.intervalMs > 0) {
         const task = createScheduledRecord(
           input.groupId,
           input.prompt,
           "interval",
           String(input.intervalMs),
-          new Date(Date.now() + input.intervalMs).toISOString()
+          new Date(Date.now() + input.intervalMs).toISOString(),
+          input.contextMode ?? "group",
+          input.script
         );
         return { jobId: task.id };
       }
-      const task = createScheduledRecord(input.groupId, input.prompt, "once", input.runAt ?? new Date().toISOString(), input.runAt ?? new Date().toISOString());
+      const task = createScheduledRecord(
+        input.groupId,
+        input.prompt,
+        "once",
+        input.runAt ?? new Date().toISOString(),
+        input.runAt ?? new Date().toISOString(),
+        input.contextMode ?? "group",
+        input.script
+      );
       return { jobId: task.id };
     },
-    listTasks(groupId) {
-      return listExecutionTasks(groupId);
+    listTasks(sourceGroupId, groupId) {
+      const targetGroup = ensureAuthorizedTargetGroup(sourceGroupId, groupId ?? sourceGroupId);
+      return listExecutionTasks(targetGroup.id);
     },
-    getTask(taskId) {
-      return getExecutionTask(taskId) ?? null;
+    getTask(sourceGroupId, taskId) {
+      const executionTask = getExecutionTask(taskId);
+      if (executionTask) {
+        ensureAuthorizedTargetGroup(sourceGroupId, executionTask.groupJid);
+        return executionTask;
+      }
+      const scheduledTask = getTaskById(taskId);
+      if (scheduledTask) {
+        ensureAuthorizedTargetGroup(sourceGroupId, scheduledTask.chat_jid);
+        return scheduledTask;
+      }
+      return null;
     },
-    pauseTask(taskId) {
-      updateExecutionTask(taskId, { status: "paused" });
+    pauseTask(sourceGroupId, taskId) {
+      const scheduledTask = getTaskById(taskId);
+      if (!scheduledTask) {
+        throw new Error(`Unknown scheduled task: ${taskId}`);
+      }
+      ensureAuthorizedTargetGroup(sourceGroupId, scheduledTask.chat_jid);
+      updateTask(taskId, { status: "paused" });
     },
-    resumeTask(taskId) {
-      updateExecutionTask(taskId, { status: "queued" });
+    resumeTask(sourceGroupId, taskId) {
+      const scheduledTask = getTaskById(taskId);
+      if (!scheduledTask) {
+        throw new Error(`Unknown scheduled task: ${taskId}`);
+      }
+      ensureAuthorizedTargetGroup(sourceGroupId, scheduledTask.chat_jid);
+      updateTask(taskId, { status: "active" });
     },
-    cancelTask(taskId) {
+    cancelTask(sourceGroupId, taskId) {
+      const scheduledTask = getTaskById(taskId);
+      if (scheduledTask) {
+        ensureAuthorizedTargetGroup(sourceGroupId, scheduledTask.chat_jid);
+        deleteTask(taskId);
+        return;
+      }
+      const executionTask = getExecutionTask(taskId);
+      if (!executionTask) {
+        throw new Error(`Unknown task: ${taskId}`);
+      }
+      ensureAuthorizedTargetGroup(sourceGroupId, executionTask.groupJid);
       updateExecutionTask(taskId, { status: "cancelled" });
     },
-    async sendMessage(groupId, text) {
+    async sendMessage(sourceGroupId, groupId, text) {
+      ensureAuthorizedTargetGroup(sourceGroupId, groupId);
       await sendToJid(groupId, text);
     },
     registerGroup(input) {
-      return registerGroup(input);
+      const sourceGroup = compatGroupById(input.sourceGroupId);
+      if (!sourceGroup?.isMain) {
+        throw new Error("Only the main group can register groups");
+      }
+      if (!isValidGroupFolder(input.folder)) {
+        throw new Error("Invalid group folder");
+      }
+      const registered = registerGroup({
+        channel: input.channel,
+        externalId: input.externalId,
+        folder: input.folder,
+        trigger: input.trigger
+      });
+      if (input.requiresTrigger === false) {
+        setRegisteredGroup(registered.id, {
+          ...toRootGroup(registered),
+          requiresTrigger: false
+        });
+        registeredGroups = syncRegisteredGroups();
+      }
+      return compatGroupById(registered.id);
     },
-    listGroups() {
-      return listGroups();
+    listGroups(sourceGroupId) {
+      const sourceGroup = compatGroupById(sourceGroupId);
+      if (!sourceGroup) {
+        throw new Error(`Unknown source group: ${sourceGroupId}`);
+      }
+      return sourceGroup.isMain ? listGroups() : [sourceGroup];
     },
-    updateGroupMounts(groupId, containerConfig) {
+    async syncGroups(sourceGroupId, force) {
+      const sourceGroup = compatGroupById(sourceGroupId);
+      if (!sourceGroup?.isMain) {
+        throw new Error("Only the main group can sync groups");
+      }
+      await syncChannelGroups(force);
+      registeredGroups = syncRegisteredGroups();
+    },
+    updateGroupMounts(sourceGroupId, groupId, containerConfig) {
+      ensureAuthorizedTargetGroup(sourceGroupId, groupId);
+      const sourceGroup = compatGroupById(sourceGroupId);
+      const validatedMounts = (containerConfig.additionalMounts as AdditionalMount[]).map((mount) => {
+        const result = validateMount(mount, sourceGroup?.isMain ?? false);
+        if (!result.allowed || !result.realHostPath || !result.resolvedContainerPath) {
+          throw new Error(result.reason);
+        }
+        return {
+          hostPath: result.realHostPath,
+          containerPath: result.resolvedContainerPath,
+          ...(result.effectiveReadonly !== undefined ? { readonly: result.effectiveReadonly } : {})
+        };
+      });
       updateRegisteredGroupMounts(groupId, {
-        additionalMounts: containerConfig.additionalMounts as AdditionalMount[]
+        additionalMounts: validatedMounts
       });
       registeredGroups = syncRegisteredGroups();
     }
@@ -746,7 +959,11 @@ export async function createOrchestrator(config = loadConfig(), runtimeOverride?
         text: message.content,
         senderId: message.sender,
         senderName: message.sender_name,
-        createdAt: message.timestamp
+        createdAt: message.timestamp,
+        ...(message.thread_id ? { threadId: message.thread_id } : {}),
+        ...(message.reply_to_message_id ? { replyToMessageId: message.reply_to_message_id } : {}),
+        ...(message.reply_to_message_content ? { replyToMessageContent: message.reply_to_message_content } : {}),
+        ...(message.reply_to_sender_name ? { replyToSenderName: message.reply_to_sender_name } : {})
       });
       registeredGroups = syncRegisteredGroups();
     }
