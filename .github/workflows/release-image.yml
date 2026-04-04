@@ -1,4 +1,4 @@
-name: Publish Release Image
+name: Publish Core Agent Image
 
 on:
   release:
@@ -18,7 +18,7 @@ env:
 
 jobs:
   publish:
-    name: Build And Push GHCR Image
+    name: Build And Push GHCR Core Agent Image
     runs-on: ubuntu-latest
 
     steps:
@@ -47,8 +47,8 @@ jobs:
             type=raw,value=${{ github.event.release.tag_name }}
             type=raw,value=latest
           labels: |
-            org.opencontainers.image.title=${{ github.event.repository.name }}-agent
-            org.opencontainers.image.description=Release image for the NanoClaw Codex runtime agent
+            org.opencontainers.image.title=${{ github.event.repository.name }}-core-agent
+            org.opencontainers.image.description=Core agent runtime image for the NanoClaw-compatible Codex fork
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ github.event.release.tag_name }}
             org.opencontainers.image.revision=${{ github.sha }}

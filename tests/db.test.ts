@@ -38,6 +38,7 @@ describe("db", () => {
   });
 
   it("updates once tasks to completed when no next run remains", () => {
+    const futureRunAt = new Date(Date.now() + 60_000).toISOString();
     createTask({
       id: "task-1",
       group_folder: "main",
@@ -45,11 +46,11 @@ describe("db", () => {
       prompt: "check status",
       script: null,
       schedule_type: "once",
-      schedule_value: "2026-04-04T11:00:00.000Z",
+      schedule_value: futureRunAt,
       context_mode: "isolated",
-      next_run: "2026-04-04T11:00:00.000Z",
+      next_run: futureRunAt,
       status: "active",
-      created_at: "2026-04-04T10:00:00.000Z"
+      created_at: new Date().toISOString()
     });
 
     expect(getDueTasks()).toHaveLength(0);

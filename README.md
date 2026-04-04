@@ -1,6 +1,6 @@
 # NanoClaw MultiRuntime
 
-An AI assistant host that follows the NanoClaw core operating model while replacing the Claude runtime boundary with Codex. The host keeps the same shape: channel registration, SQLite-backed message routing, per-group queueing, isolated group folders, scheduled tasks, and a main control channel.
+A NanoClaw-compatible core that keeps the host operating model while replacing the Claude runtime boundary with Codex. This repository is intended for developers, integrators, and channel fork authors. It is not yet a complete end-user distribution.
 
 ---
 
@@ -13,7 +13,9 @@ This repository keeps the NanoClaw host semantics but swaps the runtime/auth bou
 - container-side `codex exec` execution
 - OpenAI / OpenAI Codex model policy
 
-## Quick Start
+The built-in channels are intentionally limited to `local-dev` and `main-local`. Real user-facing entrypoints such as Web, Slack, Telegram, or Feishu should ship as separate forks or repositories on top of this core.
+
+## Core Development / Integration Quick Start
 
 ```bash
 npm install
@@ -28,6 +30,8 @@ Then in another terminal:
 npm run dev -- send --channel main-local --external-id main-local:control --message "/auth-login openai-codex"
 npm run dev -- send --channel local-dev --external-id local-dev:default --message "@Andy hello"
 ```
+
+This quick start validates the core locally. It is not the same thing as deploying a complete end-user product.
 
 ## Philosophy
 
@@ -47,6 +51,14 @@ npm run dev -- send --channel local-dev --external-id local-dev:default --messag
 - Scheduled tasks
 - Container execution with Codex
 - Project-owned OpenAI Codex login flow
+
+## Image Release
+
+The published GHCR image is the core agent runtime image:
+
+- `ghcr.io/leozhengliu-pixel/nanoclaw-multiruntime-agent`
+
+It is meant to be launched by a host process that implements the NanoClaw core control plane. It is not a standalone end-user entrypoint and is not intended to be used as `docker run ...` for a complete product experience.
 
 ## Usage
 
@@ -117,3 +129,4 @@ npm run test:container
 - The host does not import or reuse `~/.codex/auth.json`.
 - Codex login is owned by this project and stored in project data.
 - `local-dev` and `main-local` are development conveniences, not the long-term channel story.
+- This repository is a core release. Real production channels should live in separate channel forks or sibling repositories.
