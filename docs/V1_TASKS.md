@@ -125,7 +125,7 @@ Tasks:
 ## 3. Suggested Repository Structure
 
 ```text
-nanoclaw-multiruntime/
+nanoclaw-codex/
   README.md
   docs/
     ARCHITECTURE.md

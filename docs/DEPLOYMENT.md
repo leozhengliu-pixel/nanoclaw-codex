@@ -2,8 +2,8 @@
 
 This document describes how to run the NanoClaw-compatible core in development or integration environments. It does not describe a complete end-user product deployment, because this repository does not yet ship an official production channel implementation.
 
-- `launchd/com.nanoclaw-multiruntime.plist` provides a macOS service template.
-- `systemd/nanoclaw-multiruntime.service` provides a Linux service template.
+- `launchd/com.nanoclaw-codex.plist` provides a macOS service template.
+- `systemd/nanoclaw-codex.service` provides a Linux service template.
 - `container/Dockerfile` builds the core agent runtime image and installs the official `@openai/codex` CLI inside that image.
 - `container/build.sh` builds the runner image with either `docker` or `podman`.
 - `container/skills/` provides baseline in-container operator skills that are mounted read-only at runtime.
@@ -18,7 +18,7 @@ Set these environment variables before starting the host:
 
 - `NANOCLAW_CONTAINER_EXECUTOR=engine`
 - `NANOCLAW_CONTAINER_ENGINE_BINARY=docker` or `podman`
-- `NANOCLAW_CONTAINER_IMAGE=nanoclaw-multiruntime-agent:latest`
+- `NANOCLAW_CONTAINER_IMAGE=nanoclaw-codex-agent:latest`
 - `NANOCLAW_AGENT_RUNNER_MODE=codex`
 - `NANOCLAW_DEFAULT_TIMEZONE=<iana timezone>`
 - `NANOCLAW_CONTAINER_SKILLS_PATH=<host path to container skills>`
@@ -35,6 +35,14 @@ At runtime the host will:
 
 The published GHCR artifact is this agent image. It is intended for a NanoClaw-compatible host or channel fork to launch, not as a standalone product container for end users.
 
+Current image:
+
+- `ghcr.io/leozhengliu-pixel/nanoclaw-codex-agent`
+
+Deprecated image:
+
+- `ghcr.io/leozhengliu-pixel/nanoclaw-multiruntime-agent`
+
 ## What Is Not Included
 
 - No official production Web channel
@@ -42,6 +50,10 @@ The published GHCR artifact is this agent image. It is intended for a NanoClaw-c
 - No host image or docker-compose bundle marketed as a complete product deployment
 
 If a future channel repository needs a host image, that image should be treated as an integration artifact for that channel distribution rather than a change in this repository's core-release positioning.
+
+## Rename Note
+
+This repository was renamed from `nanoclaw-multiruntime` to `nanoclaw-codex`. GitHub redirects old repository URLs, but users should update their `git remote` settings and GHCR pull addresses to the new name.
 
 ## Verification
 

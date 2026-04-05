@@ -115,7 +115,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     sandboxProvider: parseSandboxProvider(resolvedEnv.NANOCLAW_SANDBOX_PROVIDER),
     containerExecutor: parseContainerExecutor(resolvedEnv.NANOCLAW_CONTAINER_EXECUTOR),
     containerEngineBinary: resolvedEnv.NANOCLAW_CONTAINER_ENGINE_BINARY ?? "docker",
-    containerImage: resolvedEnv.NANOCLAW_CONTAINER_IMAGE ?? "nanoclaw-multiruntime-agent:latest",
+    containerImage: resolvedEnv.NANOCLAW_CONTAINER_IMAGE ?? "nanoclaw-codex-agent:latest",
     containerRunnerEntrypoint:
       resolvedEnv.NANOCLAW_CONTAINER_RUNNER_ENTRYPOINT ??
       path.resolve(cwd, "container", "agent-runner", "src", "index.ts"),

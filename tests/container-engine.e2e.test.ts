@@ -68,7 +68,7 @@ afterAll(async () => {
 describe.skipIf(!shouldRun || !engineBinary)("container engine e2e", () => {
   it("executes agent-runner inside a real container with mounted workspace and sessions", async () => {
     const root = await createTempDir("nanoclaw-container-e2e-");
-    const imageName = `nanoclaw-multiruntime-e2e:${randomUUID().slice(0, 8)}`;
+    const imageName = `nanoclaw-codex-e2e:${randomUUID().slice(0, 8)}`;
     await runCommand(engineBinary!, ["build", "-t", imageName, "-f", "container/Dockerfile", "."], process.cwd());
     cleanup.push(() => runCommand(engineBinary!, ["rmi", "-f", imageName], process.cwd()));
 

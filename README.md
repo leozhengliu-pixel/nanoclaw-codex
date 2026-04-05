@@ -1,6 +1,6 @@
-# NanoClaw MultiRuntime
+# NanoClaw Codex
 
-A NanoClaw-compatible core that keeps the host operating model while replacing the Claude runtime boundary with Codex. This repository is intended for developers, integrators, and channel fork authors. It is not yet a complete end-user distribution.
+A NanoClaw-compatible core for building self-hosted AI agents with OpenAI Codex. It keeps the NanoClaw host operating model while replacing the Claude runtime boundary with Codex, giving developers and integrators a containerized agent runtime, SQLite-backed message routing, per-group queues, scheduled tasks, and project-owned Codex authentication. It is intended for channel forks, internal tooling, and custom deployments rather than as a complete end-user distribution.
 
 ---
 
@@ -14,6 +14,8 @@ This repository keeps the NanoClaw host semantics but swaps the runtime/auth bou
 - OpenAI / OpenAI Codex model policy
 
 The built-in channels are intentionally limited to `local-dev` and `main-local`. Real user-facing entrypoints such as Web, Slack, Telegram, or Feishu should ship as separate forks or repositories on top of this core.
+
+Keywords: NanoClaw, Codex, OpenAI Codex, self-hosted AI agent, AI agent framework, containerized agent runtime, SQLite message router, scheduled automation, multi-channel chatbot core.
 
 ## Core Development / Integration Quick Start
 
@@ -52,13 +54,21 @@ This quick start validates the core locally. It is not the same thing as deployi
 - Container execution with Codex
 - Project-owned OpenAI Codex login flow
 
+## Search-Friendly Overview
+
+If you are looking for a self-hosted AI agent core, Codex-powered chatbot backend, OpenAI Codex orchestration layer, or a NanoClaw fork for Web/Slack/Telegram/Feishu integrations, this repository is the core layer those channel-specific distributions should build on.
+
 ## Image Release
 
 The published GHCR image is the core agent runtime image:
 
-- `ghcr.io/leozhengliu-pixel/nanoclaw-multiruntime-agent`
+- `ghcr.io/leozhengliu-pixel/nanoclaw-codex-agent`
 
 It is meant to be launched by a host process that implements the NanoClaw core control plane. It is not a standalone end-user entrypoint and is not intended to be used as `docker run ...` for a complete product experience.
+
+Previous image name:
+
+- `ghcr.io/leozhengliu-pixel/nanoclaw-multiruntime-agent` (deprecated)
 
 ## Usage
 
@@ -130,3 +140,4 @@ npm run test:container
 - Codex login is owned by this project and stored in project data.
 - `local-dev` and `main-local` are development conveniences, not the long-term channel story.
 - This repository is a core release. Real production channels should live in separate channel forks or sibling repositories.
+- This repository was renamed from `nanoclaw-multiruntime`. Update `git remote` and GHCR pull paths to `nanoclaw-codex`.

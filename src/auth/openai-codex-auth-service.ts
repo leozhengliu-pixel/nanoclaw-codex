@@ -103,7 +103,7 @@ function buildAuthorizeUrl(redirectUri: string, pkce: { verifier: string; challe
     id_token_add_organizations: "true",
     codex_cli_simplified_flow: "true",
     state,
-    originator: "nanoclaw-multiruntime"
+    originator: "nanoclaw-codex"
   });
   return `${OPENAI_OAUTH_ISSUER}/oauth/authorize?${params.toString()}`;
 }
@@ -479,7 +479,7 @@ export class OpenAICodexAuthService {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "nanoclaw-multiruntime/0.1.0"
+        "User-Agent": "nanoclaw-codex/0.1.0"
       },
       body: JSON.stringify({ client_id: OPENAI_OAUTH_CLIENT_ID })
     });
@@ -503,7 +503,7 @@ export class OpenAICodexAuthService {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": "nanoclaw-multiruntime/0.1.0"
+          "User-Agent": "nanoclaw-codex/0.1.0"
         },
         body: JSON.stringify({
           device_auth_id: device.device_auth_id,

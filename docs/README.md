@@ -1,6 +1,6 @@
-# NanoClaw MultiRuntime Documentation
+# NanoClaw Codex Documentation
 
-These files are the local design documents and developer references for the Codex-based NanoClaw core fork. The repository is positioned as a NanoClaw-compatible core release for integrators and channel authors, not as a complete end-user product distribution.
+These files are the local design documents and developer references for the Codex-based NanoClaw core fork. The repository is positioned as a NanoClaw-compatible core release for integrators, channel authors, and teams building self-hosted AI agents or Codex-powered chatbot infrastructure, not as a complete end-user product distribution.
 
 | This directory | Purpose |
 |---|---|

@@ -1,5 +1,5 @@
 [Unit]
-Description=NanoClaw MultiRuntime
+Description=NanoClaw Codex
 After=network.target
 
 [Service]
